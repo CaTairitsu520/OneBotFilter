@@ -58,3 +58,25 @@ func TestNormalizeFileSegmentsKeepsExistingFileID(t *testing.T) {
 		t.Fatalf("missing file field should be filled from id: %v", event.Message[0].Data)
 	}
 }
+
+func TestIsMessageEventOnlyForMessages(t *testing.T) {
+	msg := []byte(`{"post_type":"message","message_type":"group","group_id":1,"user_id":2,"message":[{"type":"text","data":{"text":"hi"}}]}`)
+	notice := []byte(`{"post_type":"notice","notice_type":"friend_recall","user_id":2}`)
+	request := []byte(`{"post_type":"request","request_type":"friend","user_id":2}`)
+	meta := []byte(`{"post_type":"meta_event","meta_event_type":"heartbeat","status":{}}`)
+	if !isMessageEvent(msg) {
+		t.Fatalf("message event should be detected")
+	}
+	for name, raw := range map[string][]byte{
+		"notice":  notice,
+		"request": request,
+		"meta":    meta,
+	} {
+		if isMessageEvent(raw) {
+			t.Fatalf("%s event should NOT be treated as a message: %s", name, raw)
+		}
+	}
+	if isMessageEvent(nil) || isMessageEvent([]byte(`not json`)) {
+		t.Fatalf("unparsable payload should not be treated as a message")
+	}
+}

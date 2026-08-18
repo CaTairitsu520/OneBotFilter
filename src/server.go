@@ -2,6 +2,7 @@ package onebotfilter
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
@@ -85,8 +86,12 @@ func (wss *WsServer) readLoop(ctx context.Context) {
 	for {
 		select {
 		case msg := <-wss.readChan:
-			// 给 file 消息段补齐 file_id / file 字段，兼容未自带这些字段的客户端
-			msg.MsgData = NormalizeFileSegments(msg.MsgData)
+			// 仅对真正的消息事件补齐 file 段字段（post_type=="message"）。
+			// notice/request/meta 等状态或系统通知（例如"对方已接收你的文件"）
+			// 不触发，避免下游把通知里的 file 段误当成真实文件解析。
+			if isMessageEvent(msg.MsgData) {
+				msg.MsgData = NormalizeFileSegments(msg.MsgData)
+			}
 			// 转发给所有bot应用
 			for _, wsClient := range wss.WsClients {
 				go func(wsClient *WsClient, mt int, msg []byte) {
@@ -113,4 +118,13 @@ func (wss *WsServer) writeLoop(ctx context.Context) {
 			return
 		}
 	}
+}
+
+// isMessageEvent 判断事件是否为一条真正的消息事件（post_type=="message"）。
+// notice/request/meta 等状态或系统通知不算消息，读不出 post_type 时按非消息处理。
+func isMessageEvent(raw []byte) bool {
+	var header struct {
+		PostType string `json:"post_type"`
+	}
+	return json.Unmarshal(raw, &header) == nil && header.PostType == "message"
 }
