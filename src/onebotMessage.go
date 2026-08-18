@@ -21,6 +21,16 @@ func ParseOneBotMessage(Raw []byte) *OneBotMessage {
 	if err := json.Unmarshal(Raw, &oneBotMessage.Partial); err != nil {
 		return nil
 	}
+	// 部分客户端不传 message_format，根据 message 的 JSON 类型自动推断
+	if oneBotMessage.Partial.MessageFormat == "" {
+		msg := oneBotMessage.Partial.UnDecodedMessage
+		if len(msg) > 0 && msg[0] == '[' {
+			oneBotMessage.Partial.MessageFormat = MESSAGE_FORMAT_ARRAY
+		} else if len(msg) > 0 && msg[0] == '"' {
+			oneBotMessage.Partial.MessageFormat = MESSAGE_FORMAT_STRING
+		}
+	}
+
 	switch oneBotMessage.Partial.MessageFormat {
 	case MESSAGE_FORMAT_ARRAY:
 		if err := json.Unmarshal(oneBotMessage.Partial.UnDecodedMessage, &oneBotMessage.Partial.MessageArray); err != nil {
@@ -32,8 +42,8 @@ func ParseOneBotMessage(Raw []byte) *OneBotMessage {
 			log.Printf("将%s解析为string失败\n", oneBotMessage.Partial.UnDecodedMessage)
 			return nil
 		}
-	default: //未知的format或没有format
-		return nil
+	default: // meta_event 等没有 message 字段的事件，直接放行
+		return oneBotMessage
 	}
 	return oneBotMessage
 }

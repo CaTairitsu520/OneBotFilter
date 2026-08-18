@@ -85,6 +85,8 @@ func (wss *WsServer) readLoop(ctx context.Context) {
 	for {
 		select {
 		case msg := <-wss.readChan:
+			// 给 file 消息段补齐 file_id / file 字段，兼容未自带这些字段的客户端
+			msg.MsgData = NormalizeFileSegments(msg.MsgData)
 			// 转发给所有bot应用
 			for _, wsClient := range wss.WsClients {
 				go func(wsClient *WsClient, mt int, msg []byte) {
